@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:collection/collection.dart'; // groupBy를 위해 추가
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:intl/intl.dart';
@@ -25,7 +25,7 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
   String _aiRecommendation = '날짜를 선택하여 AI 추천을 받아보세요!';
 
   List<Routine> _allRoutines = [];
-  Map<int, bool> _routineLog = {}; // Key: routineId, Value: isCompleted
+  Map<int, bool> _routineLog = {};
 
   @override
   void initState() {
@@ -122,14 +122,14 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
   }
 
   Color _getColorForPattern(String? pattern) {
-    if (pattern == null) return Colors.grey.shade400;
+    if (pattern == null) return Colors.transparent;
     final type = _shiftTypes.firstWhere((t) => t.abbreviation == pattern,
         orElse: () => ShiftType(
             name: '',
             abbreviation: '',
             startTime: TimeOfDay.now(),
             endTime: TimeOfDay.now(),
-            color: Colors.grey));
+            color: Colors.transparent));
     return type.color;
   }
 
@@ -146,9 +146,95 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
     );
   }
 
+  // ## 👈 1. 수정/삭제 다이얼로그 함수를 다시 추가합니다. ##
+  void _showEditDialog(WorkSchedule schedule) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('근무 유형 변경'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: _shiftTypes.map((type) {
+              return ListTile(
+                leading: CircleAvatar(backgroundColor: type.color, radius: 12),
+                title: Text(type.name),
+                onTap: () async {
+                  final updatedSchedule = WorkSchedule(
+                      id: schedule.id,
+                      startDate: schedule.startDate,
+                      startTime:
+                          '${type.startTime.hour}:${type.startTime.minute}',
+                      endDate: schedule.endDate,
+                      endTime: '${type.endTime.hour}:${type.endTime.minute}',
+                      pattern: type.abbreviation);
+                  await DBHelper.updateWorkSchedule(updatedSchedule);
+                  Navigator.pop(ctx);
+                  _loadData();
+                },
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('취소'))
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConfirmationDialog(WorkSchedule schedule) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('삭제 옵션 선택'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+              leading: const Icon(Icons.looks_one),
+              title: const Text('이 날짜만 삭제'),
+              onTap: () => Navigator.pop(ctx, 'single')),
+          ListTile(
+              leading: const Icon(Icons.delete_sweep),
+              title: const Text('모든 일정 삭제'),
+              onTap: () => Navigator.pop(ctx, 'all')),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('취소'))
+        ],
+      ),
+    );
+    if (choice == 'single') {
+      await DBHelper.deleteWorkSchedule(schedule.id!);
+      _loadData();
+    } else if (choice == 'all') {
+      final confirmAll = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('정말 모든 일정을 삭제하시겠어요?'),
+          content: const Text('이 작업은 되돌릴 수 없습니다.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('취소')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('전체 삭제')),
+          ],
+        ),
+      );
+      if (confirmAll == true) {
+        await DBHelper.clearAllSchedules();
+        _loadData();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final groupedRoutines = groupBy(_allRoutines, (Routine r) => r.category);
+    final selectedSchedule = scheduleMap[_selectedDay]?.first;
 
     return Scaffold(
       appBar: AppBar(
@@ -193,6 +279,11 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
                   titleTextStyle: TextStyle(fontSize: 1.0),
                   leftChevronVisible: false,
                   rightChevronVisible: false),
+              calendarStyle: CalendarStyle(
+                tableBorder: TableBorder(
+                    horizontalInside:
+                        BorderSide(color: Colors.grey.shade200, width: 1.0)),
+              ),
               calendarBuilders: CalendarBuilders(
                 defaultBuilder: (context, day, focusedDay) =>
                     _buildCalendarCell(day),
@@ -209,11 +300,38 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
           Expanded(
             child: Column(
               children: [
-                TabBar(
-                  controller: _tabController,
-                  tabs: const [
-                    Tab(icon: Icon(Icons.psychology), text: 'AI 추천'),
-                    Tab(icon: Icon(Icons.checklist_rtl), text: '오늘의 루틴'),
+                // ## 👈 2. TabBar와 수정/삭제 아이콘을 함께 배치합니다. ##
+                Row(
+                  children: [
+                    Expanded(
+                      child: TabBar(
+                        controller: _tabController,
+                        tabs: const [
+                          Tab(
+                              icon: Icon(Icons.auto_awesome_outlined),
+                              text: 'AI 추천'),
+                          Tab(icon: Icon(Icons.checklist_rtl), text: '오늘의 루틴'),
+                        ],
+                      ),
+                    ),
+                    // 선택된 날에 근무가 있을 때만 수정/삭제 아이콘 표시
+                    if (selectedSchedule != null)
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.edit, color: Colors.green[700]),
+                            onPressed: () => _showEditDialog(selectedSchedule),
+                            tooltip: '수정하기',
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline,
+                                color: Colors.red[700]),
+                            onPressed: () =>
+                                _showDeleteConfirmationDialog(selectedSchedule),
+                            tooltip: '삭제하기',
+                          ),
+                        ],
+                      ),
                   ],
                 ),
                 Expanded(
@@ -269,62 +387,48 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
     );
   }
 
+  // ## 👈 3. 날짜 셀 전체를 색상으로 채우도록 수정합니다. ##
   Widget _buildCalendarCell(DateTime day,
       {bool isToday = false, bool isSelected = false, bool isOutside = false}) {
     final dayKey = DateTime(day.year, day.month, day.day);
-    final schedulesForDay = scheduleMap[dayKey] ?? [];
+    final schedule = scheduleMap[dayKey]?.first;
+    final cellColor = _getColorForPattern(schedule?.pattern);
+    final isFilled = schedule != null;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
-      margin: const EdgeInsets.all(2.0),
+      margin: const EdgeInsets.all(4.0),
       decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.deepPurple.withOpacity(0.2)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(4.0)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 4, left: 4),
-            child: Text('${day.day}',
-                style: TextStyle(
-                    color: isOutside
-                        ? Colors.grey[400]
-                        : (day.weekday == DateTime.sunday
-                            ? Colors.red[400]
-                            : (day.weekday == DateTime.saturday
-                                ? Colors.blue[400]
-                                : (isToday
-                                    ? Colors.deepPurple
-                                    : Colors.black87))),
-                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal)),
-          ),
-          if (schedulesForDay.isNotEmpty)
-            ...schedulesForDay.map((schedule) {
-              final type = _shiftTypes.firstWhere(
-                  (t) => t.abbreviation == schedule.pattern,
-                  orElse: () => ShiftType(
-                      name: '',
-                      abbreviation: '',
-                      startTime: TimeOfDay.now(),
-                      endTime: TimeOfDay.now(),
-                      color: Colors.grey));
-              return Container(
-                margin: const EdgeInsets.only(top: 2, left: 2, right: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                decoration: BoxDecoration(
-                    color: type.color.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(4)),
-                child: Text(type.name,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center),
-              );
-            }).toList(),
-        ],
+        color: isFilled ? cellColor.withOpacity(0.9) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8.0),
+        border:
+            isSelected ? Border.all(color: Colors.deepPurple, width: 2) : null,
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '${day.day}',
+              style: TextStyle(
+                color: isOutside
+                    ? Colors.grey[400]
+                    : (isFilled
+                        ? Colors.white
+                        : (isToday ? Colors.deepPurple : Colors.black87)),
+                fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+            if (isFilled)
+              Text(
+                schedule!.pattern,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold),
+              ),
+          ],
+        ),
       ),
     );
   }
