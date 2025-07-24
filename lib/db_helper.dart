@@ -1,36 +1,48 @@
-// lib/db_helper.dart
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
-// Routine, ShiftType, WorkSchedule 클래스는 이전과 동일합니다.
+// 루틴 자체의 정의 (예: 이름, 카테고리)
 class Routine {
   final int id;
   final String name;
   final String category;
+
   Routine({required this.id, required this.name, required this.category});
-  factory Routine.fromMap(Map<String, dynamic> map) =>
-      Routine(id: map['id'], name: map['name'], category: map['category']);
+
+  factory Routine.fromMap(Map<String, dynamic> map) {
+    return Routine(
+      id: map['id'],
+      name: map['name'],
+      category: map['category'],
+    );
+  }
 }
 
+// 특정 날짜의 루틴 완료 기록
 class RoutineLog {
   int? id;
   final int routineId;
-  final String date;
+  final String date; // YYYY-MM-DD
   bool isCompleted;
+
   RoutineLog(
       {this.id,
       required this.routineId,
       required this.date,
       required this.isCompleted});
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'routine_id': routineId,
-        'date': date,
-        'is_completed': isCompleted ? 1 : 0
-      };
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'routine_id': routineId,
+      'date': date,
+      'is_completed': isCompleted ? 1 : 0,
+    };
+  }
 }
 
+// --- 기존 ShiftType, WorkSchedule 클래스 ---
 class ShiftType {
   int? id;
   String name;
@@ -38,6 +50,7 @@ class ShiftType {
   TimeOfDay startTime;
   TimeOfDay endTime;
   Color color;
+
   ShiftType(
       {this.id,
       required this.name,
@@ -45,6 +58,7 @@ class ShiftType {
       required this.startTime,
       required this.endTime,
       required this.color});
+
   Map<String, dynamic> toMap() => {
         'id': id,
         'name': name,
@@ -53,6 +67,7 @@ class ShiftType {
         'end_time': '${endTime.hour}:${endTime.minute}',
         'color': color.value
       };
+
   factory ShiftType.fromMap(Map<String, dynamic> map) {
     final st = map['start_time'].split(':');
     final et = map['end_time'].split(':');
@@ -110,22 +125,19 @@ class DBHelper {
   static Future<Database> initDB() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, dbName);
-    // 데이터베이스 버전을 2로 올려서 루틴 기능이 포함되도록 합니다.
     return await openDatabase(path,
         version: 2, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
-  // 데이터베이스가 처음 생성될 때 호출됩니다.
   static Future<void> _onCreate(Database db, int version) async {
-    await _createTables(db, version);
+    await _createTables(db);
     await _insertInitialRoutines(db);
   }
 
-  // 데이터베이스 버전이 올라갈 때 호출됩니다.
   static Future<void> _onUpgrade(
       Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // 버전 2에서 추가된 테이블들을 생성합니다.
+      await db.execute('DROP TABLE IF EXISTS todos');
       await db.execute('''
         CREATE TABLE routines(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL)
       ''');
@@ -136,26 +148,21 @@ class DBHelper {
     }
   }
 
-  // 모든 테이블을 생성하는 함수
-  static Future<void> _createTables(Database db, int version) async {
+  static Future<void> _createTables(Database db) async {
     await db.execute('''
       CREATE TABLE shift_types(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, abbreviation TEXT, start_time TEXT, end_time TEXT, color INTEGER)
     ''');
     await db.execute('''
       CREATE TABLE work_schedules(id INTEGER PRIMARY KEY AUTOINCREMENT, start_date TEXT, start_time TEXT, end_date TEXT, end_time TEXT, pattern TEXT)
     ''');
-    // 버전 2 이상일 때만 루틴 테이블 생성
-    if (version >= 2) {
-      await db.execute('''
-        CREATE TABLE routines(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL)
-      ''');
-      await db.execute('''
-        CREATE TABLE routine_log(id INTEGER PRIMARY KEY AUTOINCREMENT, routine_id INTEGER, date TEXT NOT NULL, is_completed INTEGER NOT NULL, FOREIGN KEY (routine_id) REFERENCES routines (id))
-      ''');
-    }
+    await db.execute('''
+      CREATE TABLE routines(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL)
+    ''');
+    await db.execute('''
+      CREATE TABLE routine_log(id INTEGER PRIMARY KEY AUTOINCREMENT, routine_id INTEGER, date TEXT NOT NULL, is_completed INTEGER NOT NULL, FOREIGN KEY (routine_id) REFERENCES routines (id))
+    ''');
   }
 
-  // 초기 루틴 데이터를 삽입하는 함수
   static Future<void> _insertInitialRoutines(Database db) async {
     final routines = [
       {'name': '30분 이상 운동하기', 'category': '건강 챙기기'},
@@ -171,7 +178,7 @@ class DBHelper {
     }
   }
 
-  // --- 루틴 관련 함수들 ---
+  // --- 루틴 관련 새로운 함수들 ---
   static Future<List<Routine>> getAllRoutines() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('routines');

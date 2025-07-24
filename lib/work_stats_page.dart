@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'db_helper.dart';
+import 'package:intl/intl.dart';
 
 class WorkStatsPage extends StatefulWidget {
   const WorkStatsPage({super.key});
@@ -9,68 +11,40 @@ class WorkStatsPage extends StatefulWidget {
 }
 
 class _WorkStatsPageState extends State<WorkStatsPage> {
-  // 통계 데이터를 저장할 변수들
-  int _totalWorkDays = 0;
-  int _totalWorkHours = 0;
-  int _totalNightAllowanceHours = 0;
-  Map<String, int> _workDaysByPattern = {};
-  List<ShiftType> _shiftTypes = []; // 근무 유형 정보를 저장할 리스트
+  late DateTime _startDate;
+  late DateTime _endDate;
+  List<WorkSchedule> _allSchedules = [];
+  List<ShiftType> _shiftTypes = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    _setToThisMonth(); // ✅ 처음에는 '이번 달'로 설정
+    _loadData();
   }
 
-  Future<void> _loadStats() async {
-    final allShiftTypes = await DBHelper.getAllShiftTypes();
-    final allSchedules = await DBHelper.getAllWorkSchedules();
+  void _setToThisMonth() {
+    final now = DateTime.now();
+    _startDate = DateTime(now.year, now.month, 1);
+    _endDate = DateTime(now.year, now.month + 1, 0);
+  }
 
-    if (allSchedules.isEmpty) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-      return;
-    }
+  void _setToLastMonth() {
+    final now = DateTime.now();
+    final prevMonth = DateTime(now.year, now.month - 1, 1);
+    _startDate = DateTime(prevMonth.year, prevMonth.month, 1);
+    _endDate = DateTime(prevMonth.year, prevMonth.month + 1, 0);
+  }
 
-    // --- 통계 계산 로직 ---
-    final uniqueWorkDays = <String>{};
-    for (var schedule in allSchedules) {
-      uniqueWorkDays.add(schedule.startDate);
-    }
-    final totalWorkDays = uniqueWorkDays.length;
-    final totalWorkHours = totalWorkDays * 8;
-
-    final tempWorkDaysByPattern = <String, int>{};
-    for (var type in allShiftTypes) {
-      final count =
-          allSchedules.where((s) => s.pattern == type.abbreviation).length;
-      if (count > 0) {
-        tempWorkDaysByPattern[type.name] = count;
-      }
-    }
-
-    int nightShiftCount = 0;
-    for (var schedule in allSchedules) {
-      final startTime = TimeOfDay(
-        hour: int.parse(schedule.startTime.split(':')[0]),
-        minute: int.parse(schedule.startTime.split(':')[1]),
-      );
-      if (startTime.hour >= 22 || startTime.hour < 6) {
-        nightShiftCount++;
-      }
-    }
-    final totalNightAllowanceHours = nightShiftCount * 7;
-
-    // 계산된 데이터를 상태 변수에 저장
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    final schedules = await DBHelper.getAllWorkSchedules();
+    final types = await DBHelper.getAllShiftTypes();
     if (mounted) {
       setState(() {
-        _shiftTypes = allShiftTypes; // 근무 유형 리스트 저장
-        _totalWorkDays = totalWorkDays;
-        _totalWorkHours = totalWorkHours;
-        _workDaysByPattern = tempWorkDaysByPattern;
-        _totalNightAllowanceHours = totalNightAllowanceHours;
+        _allSchedules = schedules;
+        _shiftTypes = types;
         _isLoading = false;
       });
     }
@@ -78,119 +52,246 @@ class _WorkStatsPageState extends State<WorkStatsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // ## 👈 여기가 수정된 부분입니다! ##
-    // 근무 패턴별 통계를 보여주는 위젯들을 동적으로 생성합니다.
-    List<Widget> patternStatWidgets = _workDaysByPattern.entries.map((entry) {
-      // 현재 패턴 이름(entry.key)에 해당하는 근무 유형(ShiftType) 정보를 찾습니다.
-      final shiftType = _shiftTypes.firstWhere(
-        (type) => type.name == entry.key,
-        // 혹시 못찾을 경우를 대비한 기본값
-        orElse: () => ShiftType(
-            name: '',
-            abbreviation: '',
-            startTime: TimeOfDay.now(),
-            endTime: TimeOfDay.now(),
-            color: Colors.grey),
-      );
-
-      return Card(
-        elevation: 2,
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        child: ListTile(
-          // 찾은 근무 유형의 색상을 아이콘 색상으로 사용합니다.
-          leading: Icon(Icons.label, color: shiftType.color, size: 28),
-          title: Text(entry.key,
-              style: const TextStyle(fontWeight: FontWeight.w500)),
-          trailing: Text(
-            '${entry.value} 일',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-        ),
-      );
+    final filteredSchedules = _allSchedules.where((s) {
+      final d = DateTime.parse(s.startDate);
+      return d.isAfter(_startDate.subtract(const Duration(days: 1))) &&
+          d.isBefore(_endDate.add(const Duration(days: 1)));
     }).toList();
+
+    int totalWorkDays = filteredSchedules.length;
+    double totalWorkHours = 0;
+    Map<String, int> patternCount = {};
+
+    for (var schedule in filteredSchedules) {
+      final startTime = TimeOfDay(
+          hour: int.parse(schedule.startTime.split(':')[0]),
+          minute: int.parse(schedule.startTime.split(':')[1]));
+      final endTime = TimeOfDay(
+          hour: int.parse(schedule.endTime.split(':')[0]),
+          minute: int.parse(schedule.endTime.split(':')[1]));
+
+      int hourDiff = endTime.hour - startTime.hour;
+      int minuteDiff = endTime.minute - startTime.minute;
+      if (hourDiff < 0) {
+        hourDiff += 24;
+      }
+      totalWorkHours += hourDiff + (minuteDiff / 60.0);
+
+      patternCount[schedule.pattern] =
+          (patternCount[schedule.pattern] ?? 0) + 1;
+    }
+
+    final totalDaysInRange = _endDate.difference(_startDate).inDays + 1;
+    final totalOffDays = totalDaysInRange - totalWorkDays;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('근무 통계'),
-        centerTitle: true,
+        title: const Text('나의 근무 리포트'),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _totalWorkDays == 0
-              ? const Center(
-                  child: Text(
-                    '표시할 근무 기록이 없습니다.\n캘린더에서 근무를 먼저 추가해주세요.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '종합 근무 분석',
+          : ListView(
+              padding: const EdgeInsets.all(16.0),
+              children: [
+                // ✅✅✅ 핵심 수정 부분! ✅✅✅
+                // 제목과 날짜 선택 버튼을 한 줄에 예쁘게 배치했어.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text('종합 근무 분석',
                         style: TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.bold),
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                    TextButton.icon(
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      label: Text(
+                        '${DateFormat('yy.M.d').format(_startDate)} - ${DateFormat('yy.M.d').format(_endDate)}',
+                        style: const TextStyle(fontSize: 14),
                       ),
-                      const SizedBox(height: 16),
-                      Card(
-                        elevation: 2,
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          leading: const Icon(Icons.calendar_today,
-                              color: Colors.deepPurple),
-                          title: const Text('총 근무일'),
-                          trailing: Text(
-                            '$_totalWorkDays 일',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                      Card(
-                        elevation: 2,
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          leading: const Icon(Icons.timer_outlined,
-                              color: Colors.green),
-                          title: const Text('총 근무 시간'),
-                          subtitle: const Text('(1일 8시간 기준)'),
-                          trailing: Text(
-                            '$_totalWorkHours 시간',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                      Card(
-                        elevation: 2,
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          leading: const Icon(Icons.nightlight_round,
-                              color: Colors.orange),
-                          title: const Text('야간 수당 시간'),
-                          subtitle: const Text('(1회 7시간 기준)'),
-                          trailing: Text(
-                            '$_totalNightAllowanceHours 시간',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                      const Divider(height: 40),
-                      const Text(
-                        '근무 패턴별 근무일',
-                        style: TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 16),
-                      // 여기에 패턴별 통계 위젯들이 들어옵니다.
-                      ...patternStatWidgets,
-                    ],
-                  ),
+                      onPressed: () async {
+                        final picked = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                          initialDateRange:
+                              DateTimeRange(start: _startDate, end: _endDate),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _startDate = picked.start;
+                            _endDate = picked.end;
+                          });
+                        }
+                      },
+                    ),
+                  ],
                 ),
+                // '이번 달', '지난 달'을 선택하는 버튼
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                        onPressed: () => setState(() => _setToThisMonth()),
+                        child: const Text('이번 달')),
+                    TextButton(
+                        onPressed: () => setState(() => _setToLastMonth()),
+                        child: const Text('지난 달')),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildSummaryCards(totalWorkHours, totalWorkDays, totalOffDays),
+                const SizedBox(height: 24),
+                _buildPieChart(patternCount),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildSummaryCards(double hours, int workDays, int offDays) {
+    return Row(
+      children: [
+        Expanded(
+            child: _SummaryCard(
+                title: '총 근무 시간',
+                value: '${hours.toStringAsFixed(1)} 시간',
+                icon: Icons.timer,
+                color: Colors.orange)),
+        const SizedBox(width: 12),
+        Expanded(
+            child: _SummaryCard(
+                title: '총 근무일',
+                value: '$workDays 일',
+                icon: Icons.work,
+                color: Colors.blue)),
+        const SizedBox(width: 12),
+        Expanded(
+            child: _SummaryCard(
+                title: '총 휴일',
+                value: '$offDays 일',
+                icon: Icons.beach_access,
+                color: Colors.green)),
+      ],
+    );
+  }
+
+  Widget _buildPieChart(Map<String, int> patternCount) {
+    if (patternCount.isEmpty) {
+      return const Card(
+        child: SizedBox(
+          height: 200,
+          child: Center(child: Text('해당 기간의 근무 기록이 없습니다.')),
+        ),
+      );
+    }
+
+    final chartData = patternCount.entries.map((entry) {
+      final type = _shiftTypes.firstWhere((t) => t.abbreviation == entry.key,
+          orElse: () => ShiftType(
+              name: '알 수 없음',
+              abbreviation: '',
+              startTime: TimeOfDay.now(),
+              endTime: TimeOfDay.now(),
+              color: Colors.grey));
+      return PieChartSectionData(
+        color: type.color,
+        value: entry.value.toDouble(),
+        title: '${entry.value}회',
+        radius: 80,
+        titleStyle: const TextStyle(
+            fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+      );
+    }).toList();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('근무 유형별 분석',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 180,
+              child: PieChart(
+                PieChartData(
+                  sections: chartData,
+                  borderData: FlBorderData(show: false),
+                  sectionsSpace: 2,
+                  centerSpaceRadius: 40,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              children: patternCount.keys.map((pattern) {
+                final type = _shiftTypes.firstWhere(
+                    (t) => t.abbreviation == pattern,
+                    orElse: () => ShiftType(
+                        name: '?',
+                        abbreviation: '?',
+                        startTime: TimeOfDay.now(),
+                        endTime: TimeOfDay.now(),
+                        color: Colors.grey));
+                return _Indicator(color: type.color, text: type.name);
+              }).toList(),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  final String title, value;
+  final IconData icon;
+  final Color color;
+  const _SummaryCard(
+      {required this.title,
+      required this.value,
+      required this.icon,
+      required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
+            Text(value,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(title,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Indicator extends StatelessWidget {
+  final Color color;
+  final String text;
+  const _Indicator({required this.color, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 12, height: 12, color: color),
+        const SizedBox(width: 6),
+        Text(text),
+      ],
     );
   }
 }

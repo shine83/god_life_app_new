@@ -22,10 +22,11 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
   DateTime _focusedDay = DateTime.now();
 
   late TabController _tabController;
-  String _aiRecommendation = '날짜를 선택하여 AI 추천을 받아보세요!';
 
   List<Routine> _allRoutines = [];
   Map<int, bool> _routineLog = {};
+
+  bool _isPanelVisible = false;
 
   @override
   void initState() {
@@ -59,54 +60,45 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
         _shiftTypes = allTypes;
         _allRoutines = allRoutines;
       });
-      _onDaySelected(_selectedDay, _focusedDay);
+      // 앱 시작 시에는 UI 변경 없이 데이터만 로드
+      _loadInfoForDay(_selectedDay);
     }
   }
 
-  Future<void> _onDaySelected(DateTime selectedDay, DateTime focusedDay) async {
+  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
     final dayKey =
         DateTime.utc(selectedDay.year, selectedDay.month, selectedDay.day);
+    if (isSameDay(_selectedDay, dayKey) && _isPanelVisible) {
+      Navigator.pop(context);
+      setState(() {
+        _isPanelVisible = false;
+      });
+    } else {
+      setState(() {
+        _selectedDay = dayKey;
+        _focusedDay = dayKey;
+        _isPanelVisible = true;
+      });
+      _showInfoPanel(context);
+    }
+  }
+
+  Future<void> _loadInfoForDay(DateTime day) async {
+    final dayKey = DateTime.utc(day.year, day.month, day.day);
     final dateString = DateFormat('yyyy-MM-dd').format(dayKey);
-
-    setState(() {
-      _selectedDay = dayKey;
-      _focusedDay = focusedDay;
-      _aiRecommendation = 'AI가 맞춤 조언을 생성 중입니다... 🤔';
-    });
-
-    final recommendation = await _fetchAIRecommendation(dayKey);
     final routineLog = await DBHelper.getRoutineLogForDate(dateString);
-
     if (mounted) {
       setState(() {
-        _aiRecommendation = recommendation;
         _routineLog = routineLog;
       });
     }
   }
 
-  Future<String> _fetchAIRecommendation(DateTime forDay) async {
-    final currentSchedule = scheduleMap[forDay]?.first;
-    final currentPattern = currentSchedule?.pattern ?? '휴일';
-    final previousPattern =
-        scheduleMap[forDay.subtract(const Duration(days: 1))]?.first.pattern ??
-            '휴일';
-    final nextPattern =
-        scheduleMap[forDay.add(const Duration(days: 1))]?.first.pattern ?? '휴일';
-    return await AIService.getRecommendation(
-      currentWorkType: _getWorkTypeName(currentPattern),
-      previousWorkType: _getWorkTypeName(previousPattern),
-      nextWorkType: _getWorkTypeName(nextPattern),
-    );
-  }
-
+  // ## 👈 1. _toggleRoutine 함수는 여기에 있어야 합니다. ##
   Future<void> _toggleRoutine(Routine routine, bool isCompleted) async {
     final dateString = DateFormat('yyyy-MM-dd').format(_selectedDay);
     await DBHelper.updateRoutineLog(routine.id, dateString, isCompleted);
-    final updatedLog = await DBHelper.getRoutineLogForDate(dateString);
-    setState(() {
-      _routineLog = updatedLog;
-    });
+    _loadInfoForDay(_selectedDay); // UI 갱신을 위해 데이터 다시 로드
   }
 
   String _getWorkTypeName(String pattern) {
@@ -146,93 +138,8 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
     );
   }
 
-  void _showEditDialog(WorkSchedule schedule) {
-    showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-                title: const Text('근무 유형 변경'),
-                content: SingleChildScrollView(
-                    child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: _shiftTypes.map((type) {
-                          return ListTile(
-                              leading: CircleAvatar(
-                                  backgroundColor: type.color, radius: 12),
-                              title: Text(type.name),
-                              onTap: () async {
-                                final updatedSchedule = WorkSchedule(
-                                    id: schedule.id,
-                                    startDate: schedule.startDate,
-                                    startTime:
-                                        '${type.startTime.hour}:${type.startTime.minute}',
-                                    endDate: schedule.endDate,
-                                    endTime:
-                                        '${type.endTime.hour}:${type.endTime.minute}',
-                                    pattern: type.abbreviation);
-                                await DBHelper.updateWorkSchedule(
-                                    updatedSchedule);
-                                Navigator.pop(ctx);
-                                _loadData();
-                              });
-                        }).toList())),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('취소'))
-                ]));
-  }
-
-  void _showDeleteConfirmationDialog(WorkSchedule schedule) async {
-    final choice = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-                title: const Text('삭제 옵션 선택'),
-                content: Column(mainAxisSize: MainAxisSize.min, children: [
-                  ListTile(
-                      leading: const Icon(Icons.looks_one),
-                      title: const Text('이 날짜만 삭제'),
-                      onTap: () => Navigator.pop(ctx, 'single')),
-                  ListTile(
-                      leading: const Icon(Icons.delete_sweep),
-                      title: const Text('모든 일정 삭제'),
-                      onTap: () => Navigator.pop(ctx, 'all'))
-                ]),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('취소'))
-                ]));
-    if (choice == 'single') {
-      await DBHelper.deleteWorkSchedule(schedule.id!);
-      _loadData();
-    } else if (choice == 'all') {
-      final confirmAll = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-                  title: const Text('정말 모든 일정을 삭제하시겠어요?'),
-                  content: const Text('이 작업은 되돌릴 수 없습니다.'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('취소')),
-                    TextButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('전체 삭제'))
-                  ]));
-      if (confirmAll == true) {
-        await DBHelper.clearAllSchedules();
-        _loadData();
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final groupedRoutines = groupBy(_allRoutines, (Routine r) => r.category);
-    final selectedSchedule = scheduleMap[DateTime.utc(
-            _selectedDay.year, _selectedDay.month, _selectedDay.day)]
-        ?.first;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(DateFormat('yyyy. M').format(_focusedDay),
@@ -243,7 +150,13 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
         actions: [
           IconButton(
               icon: const Icon(Icons.today),
-              onPressed: () => _onDaySelected(DateTime.now(), DateTime.now()),
+              onPressed: () {
+                setState(() {
+                  _focusedDay = DateTime.now();
+                  _selectedDay = DateTime.now();
+                });
+                _loadInfoForDay(DateTime.now());
+              },
               tooltip: '오늘로 이동'),
           IconButton(
               icon: const Icon(Icons.add_task),
@@ -251,133 +164,45 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
               tooltip: '근무 추가'),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: TableCalendar(
-              locale: 'ko_KR',
-              firstDay: DateTime.utc(2020, 1, 1),
-              lastDay: DateTime.utc(2100, 12, 31),
-              focusedDay: _focusedDay,
-              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-              onDaySelected: _onDaySelected,
-              onPageChanged: (focusedDay) {
-                setState(() {
-                  _focusedDay = focusedDay;
-                });
-              },
-              calendarFormat: CalendarFormat.month,
-              rowHeight: 60,
-              daysOfWeekHeight: 24,
-              headerStyle: const HeaderStyle(
-                  formatButtonVisible: false,
-                  titleCentered: true,
-                  titleTextStyle: TextStyle(fontSize: 1.0),
-                  leftChevronVisible: false,
-                  rightChevronVisible: false),
-              calendarStyle: CalendarStyle(
-                tableBorder: TableBorder(
-                    horizontalInside:
-                        BorderSide(color: Colors.grey.shade200, width: 1.0)),
-              ),
-              calendarBuilders: CalendarBuilders(
-                defaultBuilder: (context, day, focusedDay) =>
-                    _buildCalendarCell(day),
-                todayBuilder: (context, day, focusedDay) =>
-                    _buildCalendarCell(day, isToday: true),
-                selectedBuilder: (context, day, focusedDay) =>
-                    _buildCalendarCell(day, isSelected: true),
-                outsideBuilder: (context, day, focusedDay) =>
-                    _buildCalendarCell(day, isOutside: true),
-              ),
-            ),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: TableCalendar(
+          locale: 'ko_KR',
+          firstDay: DateTime.utc(2020, 1, 1),
+          lastDay: DateTime.utc(2100, 12, 31),
+          focusedDay: _focusedDay,
+          selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+          onDaySelected: _onDaySelected,
+          onPageChanged: (focusedDay) {
+            setState(() {
+              _focusedDay = focusedDay;
+            });
+          },
+          calendarFormat: CalendarFormat.month,
+          rowHeight: 60,
+          daysOfWeekHeight: 24,
+          headerStyle: const HeaderStyle(
+              formatButtonVisible: false,
+              titleCentered: true,
+              titleTextStyle: TextStyle(fontSize: 1.0),
+              leftChevronVisible: false,
+              rightChevronVisible: false),
+          calendarStyle: CalendarStyle(
+            tableBorder: TableBorder(
+                horizontalInside:
+                    BorderSide(color: Colors.grey.shade200, width: 1.0)),
           ),
-          const Divider(height: 1),
-          Expanded(
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TabBar(
-                        controller: _tabController,
-                        tabs: const [
-                          Tab(
-                              icon: Icon(Icons.auto_awesome_outlined),
-                              text: 'AI 추천'),
-                          Tab(icon: Icon(Icons.checklist_rtl), text: '오늘의 루틴'),
-                        ],
-                      ),
-                    ),
-                    if (selectedSchedule != null)
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.edit, color: Colors.green[700]),
-                            onPressed: () => _showEditDialog(selectedSchedule),
-                            tooltip: '수정하기',
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.delete_outline,
-                                color: Colors.red[700]),
-                            onPressed: () =>
-                                _showDeleteConfirmationDialog(selectedSchedule),
-                            tooltip: '삭제하기',
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      SingleChildScrollView(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Text(_aiRecommendation,
-                              style:
-                                  const TextStyle(fontSize: 15, height: 1.6))),
-                      ListView(
-                        children: groupedRoutines.entries.map((entry) {
-                          final category = entry.key;
-                          final routines = entry.value;
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                                child: Text(category,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                        color: Colors.deepPurple)),
-                              ),
-                              ...routines.map((routine) {
-                                final isCompleted =
-                                    _routineLog[routine.id] ?? false;
-                                return CheckboxListTile(
-                                  title: Text(routine.name),
-                                  value: isCompleted,
-                                  onChanged: (bool? value) {
-                                    _toggleRoutine(routine, value ?? false);
-                                  },
-                                  controlAffinity:
-                                      ListTileControlAffinity.leading,
-                                );
-                              }).toList(),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          calendarBuilders: CalendarBuilders(
+            defaultBuilder: (context, day, focusedDay) =>
+                _buildCalendarCell(day),
+            todayBuilder: (context, day, focusedDay) =>
+                _buildCalendarCell(day, isToday: true),
+            selectedBuilder: (context, day, focusedDay) =>
+                _buildCalendarCell(day, isSelected: true),
+            outsideBuilder: (context, day, focusedDay) =>
+                _buildCalendarCell(day, isOutside: true),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -412,27 +237,197 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
                 : null),
       ),
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '${day.day}',
-              style: TextStyle(
-                color: dayColor,
-                fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-            if (isFilled)
-              Text(
-                schedule!.pattern,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold),
-              )
-          ],
+        child: Text(
+          '${day.day}',
+          style: TextStyle(
+              color: dayColor,
+              fontWeight: isToday ? FontWeight.bold : FontWeight.normal),
         ),
       ),
+    );
+  }
+
+  void _showInfoPanel(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.4,
+          minChildSize: 0.2,
+          maxChildSize: 0.6,
+          builder: (BuildContext context, ScrollController scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.1), blurRadius: 10)
+                ],
+              ),
+              child: _InfoPanel(
+                key: ValueKey(_selectedDay),
+                selectedDay: _selectedDay,
+                allRoutines: _allRoutines,
+                shiftTypes: _shiftTypes,
+                scheduleMap: scheduleMap,
+                routineLog: _routineLog,
+                scrollController: scrollController,
+                tabController: _tabController,
+                // ## 👈 2. 메인 페이지의 함수를 팝업창에 전달합니다. ##
+                onToggleRoutine: _toggleRoutine,
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      setState(() {
+        _isPanelVisible = false;
+      });
+    });
+  }
+}
+
+class _InfoPanel extends StatefulWidget {
+  final DateTime selectedDay;
+  final List<Routine> allRoutines;
+  final List<ShiftType> shiftTypes;
+  final Map<DateTime, List<WorkSchedule>> scheduleMap;
+  final Map<int, bool> routineLog;
+  final ScrollController scrollController;
+  final TabController tabController;
+  final Function(Routine, bool) onToggleRoutine;
+
+  const _InfoPanel({
+    super.key,
+    required this.selectedDay,
+    required this.allRoutines,
+    required this.shiftTypes,
+    required this.scheduleMap,
+    required this.routineLog,
+    required this.scrollController,
+    required this.tabController,
+    required this.onToggleRoutine,
+  });
+
+  @override
+  State<_InfoPanel> createState() => _InfoPanelState();
+}
+
+class _InfoPanelState extends State<_InfoPanel> {
+  String _aiRecommendation = 'AI 추천을 불러오는 중...';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAIRecommendation();
+  }
+
+  Future<void> _fetchAIRecommendation() async {
+    final dayKey = DateTime.utc(widget.selectedDay.year,
+        widget.selectedDay.month, widget.selectedDay.day);
+    final currentSchedule = widget.scheduleMap[dayKey]?.first;
+    final currentPattern = currentSchedule?.pattern ?? '휴일';
+    final previousPattern = widget
+            .scheduleMap[dayKey.subtract(const Duration(days: 1))]
+            ?.first
+            .pattern ??
+        '휴일';
+    final nextPattern = widget
+            .scheduleMap[dayKey.add(const Duration(days: 1))]?.first.pattern ??
+        '휴일';
+    final recommendation = await AIService.getRecommendation(
+      currentWorkType: _getWorkTypeName(currentPattern),
+      previousWorkType: _getWorkTypeName(previousPattern),
+      nextWorkType: _getWorkTypeName(nextPattern),
+    );
+    if (mounted) {
+      setState(() {
+        _aiRecommendation = recommendation;
+      });
+    }
+  }
+
+  String _getWorkTypeName(String pattern) {
+    if (pattern == '휴일') return '휴일';
+    final type = widget.shiftTypes.firstWhere((t) => t.abbreviation == pattern,
+        orElse: () => ShiftType(
+            name: '알 수 없음',
+            abbreviation: '',
+            startTime: TimeOfDay.now(),
+            endTime: TimeOfDay.now(),
+            color: Colors.grey));
+    return type.name;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groupedRoutines =
+        groupBy(widget.allRoutines, (Routine r) => r.category);
+
+    return Column(
+      children: [
+        Container(
+            width: 40,
+            height: 5,
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10))),
+        TabBar(
+          controller: widget.tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.auto_awesome_outlined), text: 'AI 추천'),
+            Tab(icon: Icon(Icons.checklist_rtl), text: '오늘의 루틴'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: widget.tabController,
+            children: [
+              ListView(
+                controller: widget.scrollController,
+                padding: const EdgeInsets.all(16),
+                children: [Text(_aiRecommendation)],
+              ),
+              ListView(
+                controller: widget.scrollController,
+                children: groupedRoutines.entries.map((entry) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Text(entry.key,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.deepPurple)),
+                      ),
+                      ...entry.value.map((routine) {
+                        final isCompleted =
+                            widget.routineLog[routine.id] ?? false;
+                        return CheckboxListTile(
+                          title: Text(routine.name),
+                          value: isCompleted,
+                          // ## 👈 3. 전달받은 함수를 여기서 호출합니다. ##
+                          onChanged: (bool? value) =>
+                              widget.onToggleRoutine(routine, value ?? false),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        );
+                      }).toList(),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
