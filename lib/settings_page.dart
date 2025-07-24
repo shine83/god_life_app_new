@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'profile_page.dart';
+import 'work_stats_page.dart'; // 근무 통계 페이지 연결
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -57,7 +58,7 @@ class _SettingsPageState extends State<SettingsPage> {
     switch (_selectedThemeMode) {
       case ThemeMode.system:
         return '시스템 설정에 따름';
-      case ThemeMode.light:
+      case ThemeMode.light: // 👈 오타 수정 완료!
         return '라이트 모드';
       case ThemeMode.dark:
         return '다크 모드';
@@ -90,7 +91,6 @@ class _SettingsPageState extends State<SettingsPage> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               // 나중에 구현 예정
-              // Navigator.push(context, MaterialPageRoute(builder: (_) => const HealthConnectPage()));
             },
           ),
           const Divider(),
@@ -101,7 +101,6 @@ class _SettingsPageState extends State<SettingsPage> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               // 나중에 구현 예정
-              // Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationSettingsPage()));
             },
           ),
           const Divider(),
@@ -119,8 +118,11 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: const Text('내 근무 패턴과 통계 보기'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              // ⚠️ WorkStatsPage가 없어서 빌드 오류 발생하므로 일단 비워둠
-              // 나중에 WorkStatsPage를 만들면 여기서 Navigator.push로 연결하면 됩니다.
+              // '근무 통계' 페이지로 이동하도록 연결된 부분
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const WorkStatsPage()),
+              );
             },
           ),
           const Divider(),
