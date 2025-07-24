@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'work_schedule_page.dart';
 import 'community_page.dart';
 import 'settings_page.dart';
-import 'db_helper.dart';
+import 'db_helper.dart'; // WorkSchedule은 이 파일에 정의되어 있을 것으로 예상됩니다.
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -63,6 +63,7 @@ class _HomeTabContentState extends State<_HomeTabContent> {
   @override
   void initState() {
     super.initState();
+    print('==== 홈 페이지 시작? ====');
     _updateHomeCardText();
   }
 
@@ -71,6 +72,7 @@ class _HomeTabContentState extends State<_HomeTabContent> {
   Future<void> _updateHomeCardText() async {
     // 1. 다음 근무 일정 찾기
     final now = DateTime.now();
+    // WorkSchedule 클래스는 db_helper.dart에 정의되어 있어야 합니다.
     final allSchedules = await DBHelper.getAllWorkSchedules();
     allSchedules.sort((a, b) {
       final aDateTime = DateTime.parse('${a.startDate} ${a.startTime}');
@@ -132,39 +134,12 @@ class _HomeTabContentState extends State<_HomeTabContent> {
               child: SizedBox(
                 width: 320,
                 height: 320,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Positioned(
-                      top: 0,
-                      child: Lottie.asset(
-                        'assets/animations/home_intro.json',
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      child: Lottie.asset(
-                        'assets/animations/godlife.json',
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Lottie.asset(
-                        'assets/animations/fitness.json',
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ],
+                child: Center(
+                  child: Image.asset(
+                    // 👈 Image.asset 위젯 사용
+                    'assets/images/home_illustration.png', // 👈 여기에 저장한 이미지 파일 경로를 정확히 입력!
+                    fit: BoxFit.contain, // 이미지가 공간에 맞춰 잘 보이도록 설정
+                  ),
                 ),
               ),
             ),

@@ -31,6 +31,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
   assets:
     - assets/animations/
+    - assets/images/  # 👈 이 줄을 추가해주세요! (앞에 띄어쓰기 2칸)
