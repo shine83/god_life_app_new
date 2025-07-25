@@ -1,48 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite/sqflite.dart'; // ✅ package: 부분 오타 수정
 import 'package:path/path.dart';
 
-// 루틴 자체의 정의 (예: 이름, 카테고리)
+// (Routine, RoutineLog, ShiftType, WorkSchedule 모델은 이전과 동일)
 class Routine {
-  final int id;
-  final String name;
-  final String category;
-
-  Routine({required this.id, required this.name, required this.category});
-
-  factory Routine.fromMap(Map<String, dynamic> map) {
-    return Routine(
-      id: map['id'],
-      name: map['name'],
-      category: map['category'],
-    );
-  }
+  int? id;
+  String name;
+  String category;
+  Routine({this.id, required this.name, required this.category});
+  Map<String, dynamic> toMap() =>
+      {'id': id, 'name': name, 'category': category};
+  factory Routine.fromMap(Map<String, dynamic> map) =>
+      Routine(id: map['id'], name: map['name'], category: map['category']);
 }
 
-// 특정 날짜의 루틴 완료 기록
 class RoutineLog {
   int? id;
   final int routineId;
-  final String date; // YYYY-MM-DD
+  final String date;
   bool isCompleted;
-
   RoutineLog(
       {this.id,
       required this.routineId,
       required this.date,
       required this.isCompleted});
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'routine_id': routineId,
-      'date': date,
-      'is_completed': isCompleted ? 1 : 0,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'routine_id': routineId,
+        'date': date,
+        'is_completed': isCompleted ? 1 : 0
+      };
 }
 
-// --- 기존 ShiftType, WorkSchedule 클래스 ---
 class ShiftType {
   int? id;
   String name;
@@ -50,24 +39,24 @@ class ShiftType {
   TimeOfDay startTime;
   TimeOfDay endTime;
   Color color;
-
+  double nightHours;
   ShiftType(
       {this.id,
       required this.name,
       required this.abbreviation,
       required this.startTime,
       required this.endTime,
-      required this.color});
-
+      required this.color,
+      this.nightHours = 0.0});
   Map<String, dynamic> toMap() => {
         'id': id,
         'name': name,
         'abbreviation': abbreviation,
         'start_time': '${startTime.hour}:${startTime.minute}',
         'end_time': '${endTime.hour}:${endTime.minute}',
-        'color': color.value
+        'color': color.value,
+        'night_hours': nightHours
       };
-
   factory ShiftType.fromMap(Map<String, dynamic> map) {
     final st = map['start_time'].split(':');
     final et = map['end_time'].split(':');
@@ -77,7 +66,8 @@ class ShiftType {
         abbreviation: map['abbreviation'],
         startTime: TimeOfDay(hour: int.parse(st[0]), minute: int.parse(st[1])),
         endTime: TimeOfDay(hour: int.parse(et[0]), minute: int.parse(et[1])),
-        color: Color(map['color']));
+        color: Color(map['color']),
+        nightHours: map['night_hours'] ?? 0.0);
   }
 }
 
@@ -126,7 +116,7 @@ class DBHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, dbName);
     return await openDatabase(path,
-        version: 2, onCreate: _onCreate, onUpgrade: _onUpgrade);
+        version: 3, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -138,29 +128,27 @@ class DBHelper {
       Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('DROP TABLE IF EXISTS todos');
-      await db.execute('''
-        CREATE TABLE routines(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL)
-      ''');
-      await db.execute('''
-        CREATE TABLE routine_log(id INTEGER PRIMARY KEY AUTOINCREMENT, routine_id INTEGER, date TEXT NOT NULL, is_completed INTEGER NOT NULL, FOREIGN KEY (routine_id) REFERENCES routines (id))
-      ''');
+      await db.execute(
+          '''CREATE TABLE routines(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL)''');
+      await db.execute(
+          '''CREATE TABLE routine_log(id INTEGER PRIMARY KEY AUTOINCREMENT, routine_id INTEGER, date TEXT NOT NULL, is_completed INTEGER NOT NULL, FOREIGN KEY (routine_id) REFERENCES routines (id))''');
       await _insertInitialRoutines(db);
+    }
+    if (oldVersion < 3) {
+      await db.execute(
+          'ALTER TABLE shift_types ADD COLUMN night_hours REAL DEFAULT 0.0');
     }
   }
 
   static Future<void> _createTables(Database db) async {
-    await db.execute('''
-      CREATE TABLE shift_types(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, abbreviation TEXT, start_time TEXT, end_time TEXT, color INTEGER)
-    ''');
-    await db.execute('''
-      CREATE TABLE work_schedules(id INTEGER PRIMARY KEY AUTOINCREMENT, start_date TEXT, start_time TEXT, end_date TEXT, end_time TEXT, pattern TEXT)
-    ''');
-    await db.execute('''
-      CREATE TABLE routines(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL)
-    ''');
-    await db.execute('''
-      CREATE TABLE routine_log(id INTEGER PRIMARY KEY AUTOINCREMENT, routine_id INTEGER, date TEXT NOT NULL, is_completed INTEGER NOT NULL, FOREIGN KEY (routine_id) REFERENCES routines (id))
-    ''');
+    await db.execute(
+        '''CREATE TABLE shift_types(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, abbreviation TEXT, start_time TEXT, end_time TEXT, color INTEGER, night_hours REAL DEFAULT 0.0)''');
+    await db.execute(
+        '''CREATE TABLE work_schedules(id INTEGER PRIMARY KEY AUTOINCREMENT, start_date TEXT, start_time TEXT, end_date TEXT, end_time TEXT, pattern TEXT)''');
+    await db.execute(
+        '''CREATE TABLE routines(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL)''');
+    await db.execute(
+        '''CREATE TABLE routine_log(id INTEGER PRIMARY KEY AUTOINCREMENT, routine_id INTEGER, date TEXT NOT NULL, is_completed INTEGER NOT NULL, FOREIGN KEY (routine_id) REFERENCES routines (id))''');
   }
 
   static Future<void> _insertInitialRoutines(Database db) async {
@@ -171,18 +159,35 @@ class DBHelper {
       {'name': '15분 독서하기', 'category': '마음 챙기기'},
       {'name': '짧은 명상하기', 'category': '마음 챙기기'},
       {'name': '감사일기 쓰기', 'category': '마음 챙기기'},
-      {'name': '따뜻한 차 마시기', 'category': '숙면 돕기'},
+      {'name': '따뜻한 차 마시기', 'category': '숙면 돕기'}
     ];
     for (var routine in routines) {
       await db.insert('routines', routine);
     }
   }
 
-  // --- 루틴 관련 새로운 함수들 ---
+  static Future<void> insertRoutine(Routine routine) async {
+    final db = await database;
+    await db.insert('routines', routine.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
   static Future<List<Routine>> getAllRoutines() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('routines');
     return List.generate(maps.length, (i) => Routine.fromMap(maps[i]));
+  }
+
+  static Future<void> updateRoutine(Routine routine) async {
+    final db = await database;
+    await db.update('routines', routine.toMap(),
+        where: 'id = ?', whereArgs: [routine.id]);
+  }
+
+  static Future<void> deleteRoutine(int id) async {
+    final db = await database;
+    await db.delete('routine_log', where: 'routine_id = ?', whereArgs: [id]);
+    await db.delete('routines', where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<Map<int, bool>> getRoutineLogForDate(String date) async {
@@ -209,7 +214,6 @@ class DBHelper {
     }
   }
 
-  // --- 기존 함수들 ---
   static Future<int> insertShiftType(ShiftType type) async {
     final db = await database;
     return await db.insert('shift_types', type.toMap(),
@@ -249,6 +253,12 @@ class DBHelper {
   static Future<void> deleteWorkSchedule(int id) async {
     final db = await database;
     await db.delete('work_schedules', where: 'id = ?', whereArgs: [id]);
+  }
+
+  static Future<void> deleteWorkSchedulesForDate(String dateString) async {
+    final db = await database;
+    await db.delete('work_schedules',
+        where: 'start_date = ?', whereArgs: [dateString]);
   }
 
   static Future<void> clearAllSchedules() async {

@@ -1,3 +1,5 @@
+// lib/work_stats_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'db_helper.dart';
@@ -20,7 +22,7 @@ class _WorkStatsPageState extends State<WorkStatsPage> {
   @override
   void initState() {
     super.initState();
-    _setToThisMonth(); // ✅ 처음에는 '이번 달'로 설정
+    _setToThisMonth();
     _loadData();
   }
 
@@ -52,6 +54,7 @@ class _WorkStatsPageState extends State<WorkStatsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 선택된 기간 내의 근무 기록만 필터링
     final filteredSchedules = _allSchedules.where((s) {
       final d = DateTime.parse(s.startDate);
       return d.isAfter(_startDate.subtract(const Duration(days: 1))) &&
@@ -63,19 +66,17 @@ class _WorkStatsPageState extends State<WorkStatsPage> {
     Map<String, int> patternCount = {};
 
     for (var schedule in filteredSchedules) {
-      final startTime = TimeOfDay(
-          hour: int.parse(schedule.startTime.split(':')[0]),
-          minute: int.parse(schedule.startTime.split(':')[1]));
-      final endTime = TimeOfDay(
-          hour: int.parse(schedule.endTime.split(':')[0]),
-          minute: int.parse(schedule.endTime.split(':')[1]));
+      // ✅ 요청사항 반영: 야간 근무 시간 계산 로직 개선
+      // 시작 날짜와 시간, 종료 날짜와 시간을 합쳐서 정확한 DateTime 객체를 생성합니다.
+      final startDateTime =
+          DateTime.parse('${schedule.startDate} ${schedule.startTime}');
+      final endDateTime =
+          DateTime.parse('${schedule.endDate} ${schedule.endTime}');
 
-      int hourDiff = endTime.hour - startTime.hour;
-      int minuteDiff = endTime.minute - startTime.minute;
-      if (hourDiff < 0) {
-        hourDiff += 24;
-      }
-      totalWorkHours += hourDiff + (minuteDiff / 60.0);
+      // 두 DateTime 객체의 차이를 구하여 근무 시간을 계산합니다.
+      // 이렇게 하면 날짜가 넘어가는 야간 근무도 정확하게 계산됩니다.
+      final duration = endDateTime.difference(startDateTime);
+      totalWorkHours += duration.inMinutes / 60.0;
 
       patternCount[schedule.pattern] =
           (patternCount[schedule.pattern] ?? 0) + 1;
@@ -93,8 +94,6 @@ class _WorkStatsPageState extends State<WorkStatsPage> {
           : ListView(
               padding: const EdgeInsets.all(16.0),
               children: [
-                // ✅✅✅ 핵심 수정 부분! ✅✅✅
-                // 제목과 날짜 선택 버튼을 한 줄에 예쁘게 배치했어.
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -126,7 +125,6 @@ class _WorkStatsPageState extends State<WorkStatsPage> {
                     ),
                   ],
                 ),
-                // '이번 달', '지난 달'을 선택하는 버튼
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
