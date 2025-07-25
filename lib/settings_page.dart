@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'profile_page.dart';
-import 'work_stats_page.dart'; // 근무 통계 페이지 연결
+// import 'health_connect_page.dart'; // 주석 처리
+import 'work_stats_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -58,7 +59,7 @@ class _SettingsPageState extends State<SettingsPage> {
     switch (_selectedThemeMode) {
       case ThemeMode.system:
         return '시스템 설정에 따름';
-      case ThemeMode.light: // 👈 오타 수정 완료!
+      case ThemeMode.light:
         return '라이트 모드';
       case ThemeMode.dark:
         return '다크 모드';
@@ -90,7 +91,7 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: const Text('헬스케어 및 외부 앱과 연동'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              // 나중에 구현 예정
+              // 기능 비활성화
             },
           ),
           const Divider(),
@@ -100,7 +101,7 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: const Text('푸시 알림, 소리, 진동'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              // 나중에 구현 예정
+              // 기능 비활성화
             },
           ),
           const Divider(),
@@ -118,7 +119,6 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: const Text('내 근무 패턴과 통계 보기'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              // '근무 통계' 페이지로 이동하도록 연결된 부분
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const WorkStatsPage()),
