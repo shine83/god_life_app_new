@@ -11,7 +11,6 @@ import 'db_helper.dart';
 import 'ai_service.dart';
 import 'notification_service.dart';
 
-// (WorkSchedulePage, _WorkSchedulePageState 클래스는 이전과 동일)
 class WorkSchedulePage extends StatefulWidget {
   const WorkSchedulePage({super.key});
   @override
@@ -25,7 +24,8 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
   DateTime? _selectedDay;
   DateTime _focusedDay = DateTime.now();
   late TabController _tabController;
-  String _todayAIHealthTip = 'AI 건강 팁을 불러오는 중...';
+
+  String _todayAIHealthTip = '건강 팁을 불러오는 중...';
   String _todayQuote = '오늘의 명언을 불러오는 중...';
 
   @override
@@ -55,23 +55,58 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
         scheduleMap = tempScheduleMap;
         _shiftTypes = allTypes;
       });
-      _fetchHomePageAIData();
+      _fetchHomePageData();
     }
   }
 
-  Future<void> _fetchHomePageAIData() async {
+  // ✅ [요청사항] AI 호출 대신 로컬 데이터를 가져오도록 함수 이름 및 내용 수정
+  Future<void> _fetchHomePageData() async {
     final today = DateTime.now();
     final todayKey = DateTime.utc(today.year, today.month, today.day);
     final currentPattern = scheduleMap[todayKey]?.firstOrNull?.pattern ?? '휴일';
-    final healthTip = await AIService.getSimpleHealthTip(
-        currentWorkType: _getWorkTypeName(currentPattern));
+
+    // ✅ AI 호출 대신 로컬 팁 함수 호출
+    final healthTip = _getLocalHealthTip(_getWorkTypeName(currentPattern));
+
+    // 명언은 계속 AI 사용
     final quote = await AIService.getQuoteOfTheDay();
+
     if (mounted) {
       setState(() {
         _todayAIHealthTip = healthTip;
         _todayQuote = quote;
       });
     }
+  }
+
+  // ✅ [요청사항] 근무 유형에 따라 미리 준비된 팁을 랜덤으로 반환하는 함수
+  String _getLocalHealthTip(String workType) {
+    final Random random = Random();
+    final Map<String, List<String>> tips = {
+      '주간근무': [
+        '점심 식사 후 가벼운 산책으로 활력을 더해보세요.',
+        '중간중간 스트레칭으로 굳은 몸을 풀어주는 건 어때요?',
+        '퇴근 후 스마트폰보다 따뜻한 차 한잔으로 하루를 마무리하세요.',
+      ],
+      '오후근무': [
+        '근무 전 가벼운 식사로 에너지를 보충하세요.',
+        '늦은 시간 퇴근 후 과식은 피하고 간단하게 허기를 채워보세요.',
+        '오전 시간을 활용해 운동이나 취미 활동을 즐겨보세요.',
+      ],
+      '야간근무': [
+        '근무 전 충분한 수면으로 밤샘 근무에 대비하세요.',
+        '근무 중 카페인 섭취는 최소화하고 물을 자주 마시는 게 좋아요.',
+        '퇴근 후에는 암막 커튼을 활용해 숙면 환경을 만들어보세요.',
+      ],
+      '휴일': [
+        '오늘은 푹 쉬면서 재충전의 시간을 갖는 건 어때요?',
+        '가까운 공원으로 산책을 나가 신선한 공기를 마셔보세요.',
+        '그동안 미뤄왔던 취미 활동으로 스트레스를 풀어보세요.',
+      ]
+    };
+
+    final tipList = tips[workType] ?? tips['휴일']!;
+    return tipList[random.nextInt(tipList.length)];
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
@@ -282,7 +317,7 @@ class _WorkSchedulePageState extends State<WorkSchedulePage>
                               IconButton(
                                   icon: const Icon(Icons.refresh,
                                       size: 20, color: Colors.grey),
-                                  onPressed: _fetchHomePageAIData,
+                                  onPressed: _fetchHomePageData,
                                   tooltip: '새로고침')
                             ],
                           ),
@@ -438,7 +473,6 @@ class _InfoPanelState extends State<_InfoPanel> {
     if (mounted) setState(() => _detailedRecommendation = recommendation);
   }
 
-  // ✅ [요청사항] 운동 추천 호출 시 근무 정보 함께 전달
   Future<void> _fetchWorkoutRecommendation() async {
     setState(() {
       _workoutRecommendation = 'AI 운동 추천을 불러오는 중...';
@@ -582,7 +616,6 @@ class _InfoPanelState extends State<_InfoPanel> {
   }
 }
 
-// (이하 _AdvancedScheduleForm 클래스는 이전과 동일하게 유지)
 class _AdvancedScheduleForm extends StatefulWidget {
   final VoidCallback onSave;
   final List<ShiftType> initialShiftTypes;

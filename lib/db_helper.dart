@@ -1,19 +1,43 @@
 import 'package:flutter/material.dart';
-import 'package:sqflite/sqflite.dart'; // ✅ package: 부분 오타 수정
+import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:intl/intl.dart';
 
-// (Routine, RoutineLog, ShiftType, WorkSchedule 모델은 이전과 동일)
+// ✅ Routine 모델에 linkedShiftTypeId 필드 추가
 class Routine {
   int? id;
   String name;
   String category;
-  Routine({this.id, required this.name, required this.category});
-  Map<String, dynamic> toMap() =>
-      {'id': id, 'name': name, 'category': category};
-  factory Routine.fromMap(Map<String, dynamic> map) =>
-      Routine(id: map['id'], name: map['name'], category: map['category']);
+  int? linkedShiftTypeId; // ✅ 어떤 근무와 연결되는지 ID 저장 (null이면 모든 근무)
+
+  Routine({
+    this.id,
+    required this.name,
+    required this.category,
+    this.linkedShiftTypeId,
+  });
+
+  // ✅ toMap, fromMap에 linked_shift_type_id 필드 추가
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'category': category,
+      'linked_shift_type_id': linkedShiftTypeId,
+    };
+  }
+
+  factory Routine.fromMap(Map<String, dynamic> map) {
+    return Routine(
+      id: map['id'],
+      name: map['name'],
+      category: map['category'],
+      linkedShiftTypeId: map['linked_shift_type_id'],
+    );
+  }
 }
 
+// (RoutineLog, ShiftType, WorkSchedule 모델은 이전과 동일)
 class RoutineLog {
   int? id;
   final int routineId;
@@ -115,8 +139,9 @@ class DBHelper {
   static Future<Database> initDB() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, dbName);
+    // ✅ DB 버전을 4로 올려서 onUpgrade가 실행되도록 함
     return await openDatabase(path,
-        version: 3, onCreate: _onCreate, onUpgrade: _onUpgrade);
+        version: 4, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -138,6 +163,11 @@ class DBHelper {
       await db.execute(
           'ALTER TABLE shift_types ADD COLUMN night_hours REAL DEFAULT 0.0');
     }
+    // ✅ 버전 4로의 업그레이드: routines 테이블에 linked_shift_type_id 컬럼 추가
+    if (oldVersion < 4) {
+      await db.execute(
+          'ALTER TABLE routines ADD COLUMN linked_shift_type_id INTEGER');
+    }
   }
 
   static Future<void> _createTables(Database db) async {
@@ -145,12 +175,20 @@ class DBHelper {
         '''CREATE TABLE shift_types(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, abbreviation TEXT, start_time TEXT, end_time TEXT, color INTEGER, night_hours REAL DEFAULT 0.0)''');
     await db.execute(
         '''CREATE TABLE work_schedules(id INTEGER PRIMARY KEY AUTOINCREMENT, start_date TEXT, start_time TEXT, end_date TEXT, end_time TEXT, pattern TEXT)''');
-    await db.execute(
-        '''CREATE TABLE routines(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL)''');
+    // ✅ routines 테이블 생성문에 linked_shift_type_id 컬럼 추가
+    await db.execute('''
+      CREATE TABLE routines(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        linked_shift_type_id INTEGER
+      )
+    ''');
     await db.execute(
         '''CREATE TABLE routine_log(id INTEGER PRIMARY KEY AUTOINCREMENT, routine_id INTEGER, date TEXT NOT NULL, is_completed INTEGER NOT NULL, FOREIGN KEY (routine_id) REFERENCES routines (id))''');
   }
 
+  // (이하 함수들 기존과 거의 동일)
   static Future<void> _insertInitialRoutines(Database db) async {
     final routines = [
       {'name': '30분 이상 운동하기', 'category': '건강 챙기기'},
@@ -242,6 +280,22 @@ class DBHelper {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('work_schedules');
     return List.generate(maps.length, (i) => WorkSchedule.fromMap(maps[i]));
+  }
+
+  // ✅ [요청사항] 특정 날짜의 근무 일정을 가져오는 함수 추가
+  static Future<WorkSchedule?> getScheduleForDate(DateTime date) async {
+    final db = await database;
+    final dateString = DateFormat('yyyy-MM-dd').format(date);
+    final List<Map<String, dynamic>> maps = await db.query(
+      'work_schedules',
+      where: 'start_date = ?',
+      whereArgs: [dateString],
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return WorkSchedule.fromMap(maps.first);
+    }
+    return null;
   }
 
   static Future<void> updateWorkSchedule(WorkSchedule schedule) async {
