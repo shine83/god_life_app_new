@@ -1,11 +1,10 @@
-// lib/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'work_schedule_page.dart';
-import 'community_page.dart';
 import 'settings_page.dart';
 import 'todo_page.dart';
 import 'db_helper.dart';
+import 'package:god_life_app/friends_calendar_view.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,7 +19,7 @@ class _HomePageState extends State<HomePage> {
     _HomeTabContent(),
     WorkSchedulePage(),
     TodoPage(),
-    CommunityPage(),
+    FriendsCalendarView(), // 'CommunityPage'에서 변경
     SettingsPage(),
   ];
 
@@ -51,9 +50,10 @@ class _HomePageState extends State<HomePage> {
             label: '할 일',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.forum_outlined),
-            activeIcon: Icon(Icons.forum),
-            label: '커뮤니티',
+            // 아이콘과 라벨 '공유'로 변경
+            icon: Icon(Icons.group_outlined),
+            activeIcon: Icon(Icons.group),
+            label: '공유',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings_outlined),
@@ -188,3 +188,6 @@ class _HomeTabContentState extends State<_HomeTabContent> {
     );
   }
 }
+
+// WorkSchedule 클래스는 db_helper.dart에 정의되어 있다고 가정합니다.
+// 예시: class WorkSchedule { final String startDate; final String startTime; final String pattern; ... }
