@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'profile_page.dart';
 import 'health_connect_page.dart'; // ✅ 1. 주석을 해제해서 파일을 불러옵니다.
 import 'work_stats_page.dart';
+import 'share_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
