@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class ShareSettingsPage extends StatefulWidget {
   const ShareSettingsPage({super.key});
@@ -22,13 +23,20 @@ class _ShareSettingsPageState extends State<ShareSettingsPage> {
     });
   }
 
-  Future<void> _saveToFirestore() async {
+  Future<void> _saveToRealtimeDatabase() async {
     if (_shareId == null || _shareId!.isEmpty) return;
 
     final data = {
       'share_work_schedule': _shareWorkSchedule,
       'share_memo': _shareMemo,
     };
+
+    final ref = FirebaseDatabase.instance.ref('share_settings/$_shareId');
+    await ref.set(data);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('공유 설정이 저장되었습니다')),
+    );
   }
 
   @override
@@ -84,7 +92,7 @@ class _ShareSettingsPageState extends State<ShareSettingsPage> {
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
-              onPressed: _saveToFirestore,
+              onPressed: _saveToRealtimeDatabase,
               icon: const Icon(Icons.save),
               label: const Text('공유 설정 저장'),
               style: ElevatedButton.styleFrom(

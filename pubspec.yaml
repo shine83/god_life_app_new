@@ -29,6 +29,7 @@ dependencies:
   shimmer: ^3.0.0
   uuid: ^4.1.0
   firebase_core: ^2.30.0
+  firebase_database: ^10.4.0
 
 dev_dependencies:
   flutter_test:

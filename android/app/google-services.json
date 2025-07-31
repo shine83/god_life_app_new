@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "610798691221",
+    "firebase_url": "https://ryeo-7e8e6-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "ryeo-7e8e6",
+    "storage_bucket": "ryeo-7e8e6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:610798691221:android:3027d91aa9f001dc000c9c",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrSgZXU248oHzfv2N4PrekRUgJEgv8jlw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:610798691221:android:43e1c5ffcad09914000c9c",
+        "android_client_info": {
+          "package_name": "com.example.god_life_app_new"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrSgZXU248oHzfv2N4PrekRUgJEgv8jlw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
