@@ -34,3 +34,18 @@ Future<void> addMemoToMyNotes({required String content}) async {
 Stream<DatabaseEvent> getMemosForUser(String uid) {
   return FirebaseDatabase.instance.ref('users/$uid/memos').onValue;
 }
+// firebase_service.dart 파일에 아래 함수를 추가하세요.
+
+// permissionKey: permissions 노드 아래의 고유 키 (예: -Nxyz...)
+Future<void> updatePermissions(String permissionKey,
+    {bool? canViewCalendar, bool? canViewMemos}) async {
+  final updates = <String, dynamic>{}; // bool? 대신 dynamic 사용
+  if (canViewCalendar != null) updates['canViewCalendar'] = canViewCalendar;
+  if (canViewMemos != null) updates['canViewMemos'] = canViewMemos;
+
+  if (updates.isNotEmpty) {
+    await FirebaseDatabase.instance
+        .ref('permissions/$permissionKey')
+        .update(updates);
+  }
+}

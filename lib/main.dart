@@ -3,7 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_core/firebase_core.dart'; // ✅ Firebase Core
 import 'firebase_options.dart'; // ✅ 생성된 Firebase 옵션 파일
-
+import 'auth_gate.dart'; // AuthGate 임포트
 import 'theme/app_theme.dart';
 import 'home_page.dart';
 import 'design_tokens.dart';
@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
       locale: const Locale('ko', 'KR'),
 
       // ✅ 4. 홈화면 설정
-      home: const HomePage(),
+      home: const AuthGate(),
     );
   }
 }

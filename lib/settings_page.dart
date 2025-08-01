@@ -4,6 +4,7 @@ import 'profile_page.dart';
 import 'health_connect_page.dart';
 import 'work_stats_page.dart';
 import 'share_settings_page.dart';
+import 'sharing_management_page.dart'; // <-- 이 줄 추가
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -127,6 +128,21 @@ class _SettingsPageState extends State<SettingsPage> {
               _showAddFriendDialog(context);
             },
           ),
+          // vvvv 이 ListTile 추가 vvvv
+          ListTile(
+            leading: const Icon(Icons.share),
+            title: const Text('공유 관리'),
+            subtitle: const Text('내 캘린더/메모 공유 권한 설정'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const SharingManagementPage()),
+              );
+            },
+          ),
+          // ^^^^ 이 ListTile 추가 ^^^^
           const Divider(),
           ListTile(
             leading: const Icon(Icons.favorite),

@@ -32,6 +32,8 @@ dependencies:
   firebase_database: ^10.4.0
   syncfusion_flutter_calendar: ^30.1.42
   firebase_auth: ^4.19.4 # 이 줄을 추가 (최신 버전)
+  google_sign_in: ^6.2.1
+  sign_in_with_apple: ^5.0.0
 
 dev_dependencies:
   flutter_test:

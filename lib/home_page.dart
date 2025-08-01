@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'work_schedule_page.dart';
 import 'settings_page.dart';
-import 'todo_page.dart';
+import 'my_memos_page.dart'; // 'todo_page.dart' 대신 'my_memos_page.dart'를 임포트
 import 'db_helper.dart';
 import 'package:god_life_app/friends_calendar_view.dart';
 
@@ -18,8 +18,8 @@ class _HomePageState extends State<HomePage> {
   final List<Widget> _pages = const [
     _HomeTabContent(),
     WorkSchedulePage(),
-    TodoPage(),
-    FriendsCalendarView(), // 'CommunityPage'에서 변경
+    MyMemosPage(), // 'TodoPage()' 또는 Text('할 일') 에서 변경
+    FriendsCalendarView(),
     SettingsPage(),
   ];
 
@@ -45,12 +45,11 @@ class _HomePageState extends State<HomePage> {
             label: '캘린더',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.checklist_outlined),
-            activeIcon: Icon(Icons.checklist),
-            label: '할 일',
+            icon: Icon(Icons.note_alt_outlined), // 아이콘 변경
+            activeIcon: Icon(Icons.note_alt),
+            label: '메모', // 라벨 변경
           ),
           BottomNavigationBarItem(
-            // 아이콘과 라벨 '공유'로 변경
             icon: Icon(Icons.group_outlined),
             activeIcon: Icon(Icons.group),
             label: '공유',
@@ -66,6 +65,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+// _HomeTabContent 위젯은 변경사항 없습니다.
 class _HomeTabContent extends StatefulWidget {
   const _HomeTabContent();
 
@@ -85,6 +85,7 @@ class _HomeTabContentState extends State<_HomeTabContent> {
   Future<void> _updateHomeCardText() async {
     try {
       final now = DateTime.now();
+      // WorkSchedule 클래스는 db_helper.dart 등에 정의되어 있어야 합니다.
       final allSchedules = await DBHelper.getAllWorkSchedules();
       allSchedules.sort((a, b) {
         final aDateTime = DateTime.parse('${a.startDate} ${a.startTime}');
@@ -188,6 +189,3 @@ class _HomeTabContentState extends State<_HomeTabContent> {
     );
   }
 }
-
-// WorkSchedule 클래스는 db_helper.dart에 정의되어 있다고 가정합니다.
-// 예시: class WorkSchedule { final String startDate; final String startTime; final String pattern; ... }

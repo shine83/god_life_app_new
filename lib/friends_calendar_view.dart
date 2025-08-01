@@ -37,7 +37,7 @@ class _FriendsCalendarViewState extends State<FriendsCalendarView> {
       ),
       body: Column(
         children: [
-          // StreamBuilder의 타입을 DatabaseEvent로 수정
+          // 친구 선택 드롭다운 메뉴
           StreamBuilder<DatabaseEvent>(
             stream: getMyFollowingList(),
             builder: (context, snapshot) {
@@ -87,17 +87,25 @@ class _FriendsCalendarViewState extends State<FriendsCalendarView> {
             },
           ),
 
+          // vvvv 이 부분이 수정되었습니다 vvvv
           Expanded(
             child: _selectedFriendUid == null
-                ? const Center(child: Text("친구를 선택하면 캘린더가 표시됩니다."))
+                // 친구 선택 전에는 빈 캘린더를 표시
+                ? SfCalendar(view: CalendarView.month)
+                // 친구 선택 후에는 해당 친구의 일정을 불러오는 캘린더를 표시
                 : StreamBuilder<DatabaseEvent>(
-                    // Firestore 관련 코드를 Realtime Database로 수정
                     stream: FirebaseDatabase.instance
                         .ref('users/$_selectedFriendUid/events')
                         .onValue,
                     builder: (context, snapshot) {
+                      // 로딩 중에도 캘린더 UI의 배경은 계속 보여줌
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return Stack(
+                          children: [
+                            SfCalendar(view: CalendarView.month),
+                            const Center(child: CircularProgressIndicator()),
+                          ],
+                        );
                       }
 
                       List<Appointment> appointments = [];
@@ -108,8 +116,7 @@ class _FriendsCalendarViewState extends State<FriendsCalendarView> {
                         appointments = eventsMap.entries.map((entry) {
                           final data = entry.value as Map<dynamic, dynamic>;
                           return Appointment(
-                            startTime: DateTime.parse(data[
-                                'startTime']), // Timestamp 대신 DateTime.parse
+                            startTime: DateTime.parse(data['startTime']),
                             endTime: DateTime.parse(data['endTime']),
                             subject: data['eventName'] ?? '',
                             isAllDay: data['isAllDay'] ?? false,
