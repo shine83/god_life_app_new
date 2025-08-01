@@ -30,11 +30,12 @@ target 'Runner' do
   use_frameworks!
   use_modular_headers!
 
-  pod 'Firebase', :modular_headers => true
-  pod 'Firebase/Core', '~> 10.25.0'
-  pod 'FirebaseDatabase', '~> 10.25.0' 
-  pod 'GoogleSignIn', '~> 8.0.0'
-  pod 'GoogleUtilities/UserDefaults', '~> 8.0.0'
+ # ✅ Firebase 관련 pod 제거 또는 주석 처리
+  # pod 'Firebase', :modular_headers => true
+  # pod 'Firebase/Core', '~> 10.25.0'
+  # pod 'FirebaseDatabase', '~> 10.25.0'
+  # pod 'GoogleSignIn', '~> 8.0.0'
+  # pod 'GoogleUtilities/UserDefaults', '~> 8.0.0'
 
   flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
   

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:god_life_app/firebase_service.dart';
+import 'package:god_life_app/supabase_service.dart';
 import 'profile_page.dart';
 import 'health_connect_page.dart';
 import 'work_stats_page.dart';
@@ -137,8 +137,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const SharingManagementPage()),
+                MaterialPageRoute(builder: (_) => const ShareManagePage()),
               );
             },
           ),

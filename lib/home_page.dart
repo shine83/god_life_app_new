@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'work_schedule_page.dart';
 import 'settings_page.dart';
-import 'my_memos_page.dart'; // 'todo_page.dart' 대신 'my_memos_page.dart'를 임포트
+import 'my_memos_page.dart';
 import 'db_helper.dart';
 import 'package:god_life_app/friends_calendar_view.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'login_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,7 +20,7 @@ class _HomePageState extends State<HomePage> {
   final List<Widget> _pages = const [
     _HomeTabContent(),
     WorkSchedulePage(),
-    MyMemosPage(), // 'TodoPage()' 또는 Text('할 일') 에서 변경
+    MyMemosPage(),
     FriendsCalendarView(),
     SettingsPage(),
   ];
@@ -45,9 +47,9 @@ class _HomePageState extends State<HomePage> {
             label: '캘린더',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.note_alt_outlined), // 아이콘 변경
+            icon: Icon(Icons.note_alt_outlined),
             activeIcon: Icon(Icons.note_alt),
-            label: '메모', // 라벨 변경
+            label: '메모',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.group_outlined),
@@ -65,7 +67,6 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// _HomeTabContent 위젯은 변경사항 없습니다.
 class _HomeTabContent extends StatefulWidget {
   const _HomeTabContent();
 
@@ -85,7 +86,6 @@ class _HomeTabContentState extends State<_HomeTabContent> {
   Future<void> _updateHomeCardText() async {
     try {
       final now = DateTime.now();
-      // WorkSchedule 클래스는 db_helper.dart 등에 정의되어 있어야 합니다.
       final allSchedules = await DBHelper.getAllWorkSchedules();
       allSchedules.sort((a, b) {
         final aDateTime = DateTime.parse('${a.startDate} ${a.startTime}');
@@ -184,6 +184,28 @@ class _HomeTabContentState extends State<_HomeTabContent> {
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 20.0),
+            child: ElevatedButton(
+              onPressed: () async {
+                await Supabase.instance.client.auth.signOut();
+                if (context.mounted) {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+              ),
+              child: const Text(
+                "로그아웃",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          )
         ],
       ),
     );

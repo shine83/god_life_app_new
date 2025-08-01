@@ -1,87 +1,107 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:god_life_app/firebase_service.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_page.dart';
 
-class SignUpPage extends StatefulWidget {
-  const SignUpPage({super.key});
+class SignupPage extends StatefulWidget {
+  const SignupPage({super.key});
 
   @override
-  State<SignUpPage> createState() => _SignUpPageState();
+  State<SignupPage> createState() => _SignupPageState();
 }
 
-class _SignUpPageState extends State<SignUpPage> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  bool _isLoading = false;
+class _SignupPageState extends State<SignupPage> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _loading = false;
+  String? _message;
 
   Future<void> _signUp() async {
     setState(() {
-      _isLoading = true;
+      _loading = true;
+      _message = null;
     });
+
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
     try {
-      final UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+      final response = await Supabase.instance.client.auth.signUp(
+        email: email,
+        password: password,
       );
 
-      final User? user = userCredential.user;
+      if (response.user != null) {
+        setState(() => _message = "가입 성공! 이메일 인증을 완료하세요.");
 
-      if (user != null) {
-        //await createUserProfile(user);
-
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomePage()),
-          );
-        }
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('회원가입 실패: ${e.message}')),
+          const SnackBar(
+            content: Text("이메일로 전송된 인증 링크를 확인해주세요."),
+            duration: Duration(seconds: 4),
+          ),
         );
       }
+    } on AuthException catch (e) {
+      setState(() => _message = "가입 실패: ${e.message}");
+    } catch (_) {
+      setState(() => _message = "알 수 없는 오류 발생");
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('회원가입')),
+      appBar: AppBar(title: const Text("회원가입")),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             TextField(
               controller: _emailController,
-              decoration: const InputDecoration(labelText: '이메일'),
+              decoration: const InputDecoration(labelText: "이메일"),
               keyboardType: TextInputType.emailAddress,
             ),
-            const SizedBox(height: 8),
             TextField(
               controller: _passwordController,
-              decoration: const InputDecoration(labelText: '비밀번호'),
+              decoration: const InputDecoration(labelText: "비밀번호"),
               obscureText: true,
             ),
-            const SizedBox(height: 20),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _signUp,
-                    style: ElevatedButton.styleFrom(
-                      foregroundColor: Colors.white, // 글씨 색상을 흰색으로 지정
-                    ),
-                    child: const Text('가입하기'),
+            const SizedBox(height: 16),
+            if (_message != null)
+              Text(
+                _message!,
+                style: TextStyle(
+                  color: _message!.contains("성공") ? Colors.green : Colors.red,
+                ),
+              ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _loading ? null : _signUp,
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.deepPurple,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                ),
+                child: _loading
+                    ? const CircularProgressIndicator()
+                    : const Text("회원가입"),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HomePage()),
+                );
+              },
+              child: const Text("홈으로 돌아가기"),
+            ),
           ],
         ),
       ),

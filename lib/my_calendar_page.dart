@@ -1,36 +1,47 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:god_life_app/firebase_service.dart';
+import 'package:god_life_app/supabase_service.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class MyCalendarPage extends StatelessWidget {
+class MyCalendarPage extends StatefulWidget {
   const MyCalendarPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final String myUid = FirebaseAuth.instance.currentUser!.uid;
+  State<MyCalendarPage> createState() => _MyCalendarPageState();
+}
 
+class _MyCalendarPageState extends State<MyCalendarPage> {
+  late final String userId;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      throw Exception("로그인이 필요합니다");
+    }
+    userId = user.id;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(myUid)
-            .collection('events')
-            .snapshots(),
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: getCalendarEventsStream(userId),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final appointments = snapshot.data!.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
+          final appointments = (snapshot.data ?? []).map((data) {
             return Appointment(
-              startTime: (data['startTime'] as Timestamp).toDate(),
-              endTime: (data['endTime'] as Timestamp).toDate(),
+              startTime: DateTime.parse(data['startTime']),
+              endTime: DateTime.parse(data['endTime']),
               subject: data['eventName'] ?? '',
               isAllDay: data['isAllDay'] ?? false,
               color: data['color'] != null
-                  ? Color(int.parse(data['color'], radix: 16))
+                  ? Color(int.tryParse(data['color'].toString()) ??
+                      Colors.blue.value)
                   : Colors.blue,
             );
           }).toList();
@@ -53,8 +64,8 @@ class MyCalendarPage extends StatelessWidget {
 
   void _showAddEventDialog(BuildContext context) {
     final TextEditingController eventNameController = TextEditingController();
-    DateTime? startDate;
-    DateTime? endDate;
+    DateTime startDate = DateTime.now();
+    DateTime endDate = DateTime.now().add(const Duration(hours: 1));
 
     showDialog(
       context: context,
@@ -73,19 +84,12 @@ class MyCalendarPage extends StatelessWidget {
             TextButton(
               child: const Text('저장'),
               onPressed: () async {
-                // TODO: 날짜/시간 선택 UI 추가 (showDatePicker, showTimePicker)
-                // 우선은 현재 시간으로 임시 저장
-                startDate = DateTime.now();
-                endDate = DateTime.now().add(const Duration(hours: 1));
-
-                if (eventNameController.text.isNotEmpty &&
-                    startDate != null &&
-                    endDate != null) {
+                if (eventNameController.text.isNotEmpty) {
                   await addEventToMyCalendar(
                     eventName: eventNameController.text,
-                    startTime: startDate!,
-                    endTime: endDate!,
-                    color: Colors.blue, // TODO: 색상 선택 기능
+                    startTime: startDate,
+                    endTime: endDate,
+                    color: Colors.blue,
                   );
                   Navigator.of(context).pop();
                 }

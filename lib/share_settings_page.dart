@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ShareSettingsPage extends StatefulWidget {
   const ShareSettingsPage({super.key});
@@ -10,95 +9,115 @@ class ShareSettingsPage extends StatefulWidget {
 }
 
 class _ShareSettingsPageState extends State<ShareSettingsPage> {
-  String? _shareId;
-  bool _shareWorkSchedule = false;
-  bool _shareMemo = false;
-  final TextEditingController _idController = TextEditingController();
+  bool shareCalendar = false;
+  bool shareMemo = false;
+  bool isLoading = true;
 
-  void _generateNewShareId() {
-    final uuid = const Uuid().v4().substring(0, 8); // 짧은 ID 생성
-    setState(() {
-      _shareId = uuid;
-      _idController.text = uuid;
-    });
-  }
-
-  Future<void> _saveToRealtimeDatabase() async {
-    if (_shareId == null || _shareId!.isEmpty) return;
-
-    final data = {
-      'share_work_schedule': _shareWorkSchedule,
-      'share_memo': _shareMemo,
-    };
-
-    final ref = FirebaseDatabase.instance.ref('share_settings/$_shareId');
-    await ref.set(data);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('공유 설정이 저장되었습니다')),
-    );
-  }
+  final user = Supabase.instance.client.auth.currentUser;
+  final supabase = Supabase.instance.client;
 
   @override
-  void dispose() {
-    _idController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _loadShareSettings();
+  }
+
+  // 🔄 공유 설정 불러오기
+  Future<void> _loadShareSettings() async {
+    if (user == null) return;
+
+    final res = await supabase
+        .from('share_settings')
+        .select()
+        .eq('user_id', user!.id)
+        .maybeSingle();
+
+    if (res != null) {
+      setState(() {
+        shareCalendar = res['share_calendar'] ?? false;
+        shareMemo = res['share_memo'] ?? false;
+      });
+    }
+
+    setState(() => isLoading = false);
+  }
+
+  // 💾 저장
+  Future<void> _saveSettings() async {
+    if (user == null) return;
+
+    await supabase.from('share_settings').upsert({
+      'user_id': user!.id,
+      'share_calendar': shareCalendar,
+      'share_memo': shareMemo,
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('공유 설정이 저장되었습니다.')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text('공유 설정')),
+      appBar: AppBar(
+        title: const Text('공유 설정'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: _saveSettings,
+            tooltip: '저장',
+          ),
+        ],
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('📌 공유 ID 생성 또는 입력'),
+            // 🔑 내 공유 ID 표시
+            Text(
+              '내 공유 ID',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _idController,
-                    decoration: const InputDecoration(
-                      hintText: '공유 ID 입력 또는 생성',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (value) => _shareId = value,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _generateNewShareId,
-                  child: const Text('ID 생성'),
-                ),
-              ],
+            SelectableText(
+              user?.id ?? '로그인 필요',
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
             ),
-            const SizedBox(height: 20),
-            const Divider(),
+            const SizedBox(height: 24),
+
+            // ☑️ 공유 항목 체크박스
+            Text(
+              '공유할 항목 선택',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
             CheckboxListTile(
-              title: const Text('근무일정 공유'),
-              value: _shareWorkSchedule,
-              onChanged: (value) {
-                setState(() => _shareWorkSchedule = value ?? false);
+              value: shareCalendar,
+              onChanged: (val) {
+                setState(() {
+                  shareCalendar = val ?? false;
+                });
               },
+              title: const Text('캘린더 일정 공유'),
             ),
             CheckboxListTile(
+              value: shareMemo,
+              onChanged: (val) {
+                setState(() {
+                  shareMemo = val ?? false;
+                });
+              },
               title: const Text('메모 공유'),
-              value: _shareMemo,
-              onChanged: (value) {
-                setState(() => _shareMemo = value ?? false);
-              },
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: _saveToRealtimeDatabase,
-              icon: const Icon(Icons.save),
-              label: const Text('공유 설정 저장'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).primaryColor,
-                foregroundColor: Colors.white,
-              ),
             ),
           ],
         ),
